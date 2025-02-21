@@ -1,34 +1,27 @@
 # src/main.py
 
 import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gio
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
 
+from gui.parts_window import PartsWindow
 from database import engine
 from database.models import Base
-from gui.parts_window import PartsWindow
 
-class EMARPIApp(Gtk.Application):
+class EMARPIApp(Gtk.Window):
     def __init__(self):
-        super().__init__(application_id="com.emarpi.AligniClone",
-                         flags=Gio.ApplicationFlags.FLAGS_NONE)
-
-    def do_activate(self):
-        # Ensure DB tables exist (auto-migration)
-        Base.metadata.create_all(bind=engine)
-
-        window = Gtk.ApplicationWindow(application=self)
-        window.set_title("EMARPI Aligni Clone - Parts")
-        window.set_default_size(800, 600)
-
-        parts_view = PartsWindow()
-        window.set_child(parts_view)
-
-        window.present()
+        Gtk.Window.__init__(self, title="EMARPI Aligni Clone - Parts (GTK3)")
+        self.set_default_size(800, 600)
+        self.add(PartsWindow())
+        self.connect("destroy", Gtk.main_quit)
+        self.show_all()
 
 def main():
+    # Ensure the database tables exist
+    Base.metadata.create_all(bind=engine)
+
     app = EMARPIApp()
-    app.run()
+    Gtk.main()
 
 if __name__ == "__main__":
     main()

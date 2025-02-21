@@ -1,28 +1,27 @@
-# gui/parts_window.py
+# gui/parts_window_gtk3.py
 
 import gi
-gi.require_version("Gtk", "4.0")
-from gi.repository import Gtk, Gdk
+gi.require_version("Gtk", "3.0")
+from gi.repository import Gtk
 
 from database import SessionLocal
 from database.models import Part
 
 class AddPartDialog(Gtk.Dialog):
-    """
-    A simple dialog to add a new Part.
-    """
     def __init__(self, parent):
-        super().__init__(title="Add New Part", transient_for=parent, modal=True)
-
+        Gtk.Dialog.__init__(self, "Add New Part", parent, 0,
+            (Gtk.STOCK_CANCEL, Gtk.ResponseType.CANCEL,
+             Gtk.STOCK_OK, Gtk.ResponseType.OK))
         self.set_default_size(400, 300)
+        
         box = self.get_content_area()
+        grid = Gtk.Grid()
+        grid.set_column_spacing(8)
+        grid.set_row_spacing(8)
+        grid.set_border_width(12)
+        box.add(grid)
 
-        grid = Gtk.Grid(column_spacing=8, row_spacing=8, margin=12)
-        box.append(grid)
-
-        # Labels & Entries
         self.entries = {}
-
         row = 0
         for label_text, key in [
             ("Part Number", "part_number"),
@@ -33,7 +32,8 @@ class AddPartDialog(Gtk.Dialog):
             ("Value", "value"),
             ("Use-As Units", "use_as_units"),
         ]:
-            label = Gtk.Label(label=label_text, halign=Gtk.Align.END)
+            label = Gtk.Label(label=label_text)
+            label.set_halign(Gtk.Align.END)
             entry = Gtk.Entry()
             self.entries[key] = entry
 
@@ -41,29 +41,26 @@ class AddPartDialog(Gtk.Dialog):
             grid.attach(entry, 1, row, 1, 1)
             row += 1
 
-        # Checkboxes
-        self.manufactured_here_check = Gtk.CheckButton(label="Manufactured Here?")
-        self.rohs_check = Gtk.CheckButton(label="RoHS Compliant?")
+        self.manufactured_here_check = Gtk.CheckButton("Manufactured Here?")
+        self.rohs_check = Gtk.CheckButton("RoHS Compliant?")
         grid.attach(self.manufactured_here_check, 0, row, 2, 1)
         row += 1
         grid.attach(self.rohs_check, 0, row, 2, 1)
         row += 1
 
-        # Comment (multi-line)
-        label = Gtk.Label(label="Comment", halign=Gtk.Align.END)
+        label = Gtk.Label(label="Comment")
+        label.set_halign(Gtk.Align.END)
         self.comment_view = Gtk.TextView()
-        scrolled_window = Gtk.ScrolledWindow()
-        scrolled_window.set_child(self.comment_view)
-        scrolled_window.set_min_content_height(60)
+        scrolled = Gtk.ScrolledWindow()
+        scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
+        scrolled.add(self.comment_view)
+        scrolled.set_min_content_height(60)
 
         grid.attach(label, 0, row, 1, 1)
-        grid.attach(scrolled_window, 1, row, 1, 1)
+        grid.attach(scrolled, 1, row, 1, 1)
         row += 1
 
-        # Buttons
-        self.add_button("Cancel", Gtk.ResponseType.CANCEL)
-        self.add_button("Add Part", Gtk.ResponseType.OK)
-        self.show()
+        self.show_all()
 
     def get_part_data(self):
         buffer = self.comment_view.get_buffer()
@@ -85,33 +82,25 @@ class AddPartDialog(Gtk.Dialog):
 
 
 class PartsWindow(Gtk.Box):
-    """
-    Main widget to display a list of Parts and let you add new ones.
-    """
     def __init__(self):
-        super().__init__(orientation=Gtk.Orientation.VERTICAL, spacing=6)
-        self.set_margin_start(6)
-        self.set_margin_end(6)
-        self.set_margin_top(6)
-        self.set_margin_bottom(6)
+        Gtk.Box.__init__(self, orientation=Gtk.Orientation.VERTICAL, spacing=6)
+        self.set_border_width(6)
 
         # Top button bar
         button_box = Gtk.Box(spacing=6)
-        self.append(button_box)
+        self.pack_start(button_box, False, False, 0)
 
-        add_button = Gtk.Button(label="Add Part")
+        add_button = Gtk.Button("Add Part")
         add_button.connect("clicked", self.on_add_part_clicked)
-        button_box.append(add_button)
+        button_box.pack_start(add_button, False, False, 0)
 
-        refresh_button = Gtk.Button(label="Refresh")
+        refresh_button = Gtk.Button("Refresh")
         refresh_button.connect("clicked", self.on_refresh_clicked)
-        button_box.append(refresh_button)
+        button_box.pack_start(refresh_button, False, False, 0)
 
-        # TreeView
-        self.store = Gtk.ListStore(int, str, str, str) 
-        # columns: ID, part_number, manufacturer, description
-
-        self.treeview = Gtk.TreeView(model=self.store)
+        # TreeView to list parts
+        self.store = Gtk.ListStore(int, str, str, str)
+        self.treeview = Gtk.TreeView(self.store)
 
         for i, col_title in enumerate(["ID", "Part Number", "Manufacturer", "Description"]):
             renderer = Gtk.CellRendererText()
@@ -119,12 +108,10 @@ class PartsWindow(Gtk.Box):
             self.treeview.append_column(column)
 
         scrolled = Gtk.ScrolledWindow()
-        scrolled.set_child(self.treeview)
         scrolled.set_policy(Gtk.PolicyType.AUTOMATIC, Gtk.PolicyType.AUTOMATIC)
-        scrolled.set_vexpand(True)
-        self.append(scrolled)
+        scrolled.add(self.treeview)
+        self.pack_start(scrolled, True, True, 0)
 
-        # Load data initially
         self.load_parts()
 
     def load_parts(self):
@@ -135,13 +122,12 @@ class PartsWindow(Gtk.Box):
             self.store.append([p.id, p.part_number, p.manufacturer or "", p.description or ""])
         session.close()
 
-    def on_add_part_clicked(self, button):
-        dialog = AddPartDialog(self.get_root())
+    def on_add_part_clicked(self, widget):
+        dialog = AddPartDialog(self.get_toplevel())
         response = dialog.run()
 
         if response == Gtk.ResponseType.OK:
             data = dialog.get_part_data()
-            # Save to DB
             session = SessionLocal()
             new_part = Part(**data)
             session.add(new_part)
@@ -151,5 +137,5 @@ class PartsWindow(Gtk.Box):
 
         dialog.destroy()
 
-    def on_refresh_clicked(self, button):
+    def on_refresh_clicked(self, widget):
         self.load_parts()
